@@ -1,7 +1,7 @@
 ---
 title: "Web Scraping"
-author: "Matthew Ross"
-date: "10/20/2019"
+author: "Elaina Passero"
+date: "10/24/2019"
 output: html_document
 ---
 
@@ -10,6 +10,8 @@ library(rvest)
 library(tidyverse)
 library(lubridate)
 library(readxl)
+library(pdftools)
+library(readr)
 
 ```
 
@@ -70,6 +72,9 @@ file_names <- paste0('data/',dataset)
 #   download.file(links[i],destfile=file_names[i])
 # }
 
+download <- !file.exists(file_names)
+evaluate <- all(download)
+
 ```
 
 ### Download data in a map
@@ -77,7 +82,10 @@ file_names <- paste0('data/',dataset)
 ```{r}
 
 #Map version of the same forloop (downloading 4 files)
-map2(links,file_names,download.file)
+if(evaluate = T){
+  map2(links,file_names,download.file)
+}
+
 
 ```
 
@@ -148,6 +156,12 @@ Here I want you to use the `rvest` package to get the URLs for
 the `SASP forcing` and `SBSP_forcing` meteoroligical datasets.
 
 ```{r}
+site_url <- 'https://snowstudies.org/archived-data/'
+
+urls <- webpage %>%
+  html_nodes('a') %>%
+  .[grepl('forcing',.)] %>%
+  html_attr('href')
 
 ```
 
@@ -159,6 +173,15 @@ You can use a for loop or a map function.
 
 ```{r}
 
+splits1 <- str_split_fixed(urls,'/',6)
+force_dataset <- splits1[,5]
+file_names1 <- paste0('data/',force_dataset)
+
+download1 <- !file.exists(file_names1)
+evaluate <- all(download1)
+
+map2(urls,file_names1,download.file)
+  
 ```
 
 ## Read in the data
@@ -168,13 +191,29 @@ column to the data.
 
 ```{r}
 
+# Read headers from PDF
+headers <- pdf_text("https://snowstudies.org/data/Serially-Complete-Metadata-text08.pdf") %>%
+  readr::read_lines(.) %>%
+  trimws(.) %>%
+  str_split_fixed(.,"\\.",2) %>%
+  .[,2] %>%
+  .[1:26]
+
+add_site <- function(path){
+  file <- str_split_fixed(path,'/',2)[2] # extract file name
+  name <- str_split_fixed(file,"\\-",4)[1,3] # get site name
+  df <- read_delim(path, col_names = headers, delim = " ") %>%
+    mutate(site = name)
+}
+
+
 ```
 
 
 Use the `map` function to read in both meteorological files.
 
 ```{r}
-
+force_data_full <- map_dfr(file_names1,add_site)
 ```
 
 
